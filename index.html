@@ -679,6 +679,22 @@ body{display:flex;flex-direction:column;}
 /* OVERLAY SCREENS */
 .screen{position:fixed;inset:0;background:var(--bg);z-index:9000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 20px;text-align:center;gap:12px;}
 .screen.hidden{display:none;}
+
+/* PIN SCREEN */
+.pin-box{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:24px 20px;width:100%;max-width:320px;display:flex;flex-direction:column;gap:14px;}
+.pin-input-wrap{position:relative;}
+.pin-input{width:100%;background:var(--bg);border:2px solid var(--border);border-radius:10px;color:var(--text);font-size:1.4rem;font-weight:700;letter-spacing:.3em;text-align:center;padding:14px 40px 14px 14px;-webkit-appearance:none;font-family:monospace;}
+.pin-input:focus{outline:none;border-color:var(--green);}
+.pin-input.err{border-color:var(--red);animation:shake .4s;}
+.pin-input.ok{border-color:var(--green);}
+.pin-eye{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;padding:4px;}
+.pin-rules{font-size:.72rem;color:var(--muted);text-align:left;line-height:1.6;}
+.pin-rules b{color:var(--text);}
+.pin-strength{height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+.pin-strength-fill{height:100%;border-radius:2px;transition:width .3s,background .3s;}
+.pin-err{font-size:.78rem;color:var(--red);min-height:18px;text-align:center;}
+.pin-attempts{font-size:.7rem;color:var(--amber);min-height:16px;}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
 .screen-icon{font-size:3rem;margin-bottom:8px;}
 .screen-title{font-family:monospace;font-size:1.3rem;font-weight:700;}
 .screen-title b{color:var(--green);}
@@ -765,6 +781,30 @@ header{background:var(--surf);border-bottom:1px solid var(--border);padding:10px
 </style>
 </head>
 <body>
+
+<!-- ÉCRAN PIN -->
+<div class="screen" id="scrPin">
+  <div class="screen-icon">🔐</div>
+  <div class="screen-title">Tracé<b>O</b></div>
+  <p class="screen-sub" id="pinSub">Entrez votre code d'accès</p>
+  <div class="pin-box">
+    <div class="pin-input-wrap">
+      <input class="pin-input" id="pinInput" type="password"
+        inputmode="text" autocomplete="off" autocorrect="off"
+        autocapitalize="characters" spellcheck="false"
+        maxlength="8" placeholder="••••••••">
+      <button class="pin-eye" id="pinEye" type="button">👁</button>
+    </div>
+    <div class="pin-strength"><div class="pin-strength-fill" id="pinFill" style="width:0%"></div></div>
+    <div class="pin-rules" id="pinRules">
+      <b>Règles :</b> 8 caractères · au moins 1 chiffre · au moins 1 lettre
+    </div>
+    <div class="pin-err" id="pinErr"></div>
+    <div class="pin-attempts" id="pinAttempts"></div>
+    <button class="bigbtn" id="btnPinOk">Valider</button>
+    <button class="bigbtn ghost" id="btnPinReset" style="display:none;color:var(--red)">Réinitialiser le code</button>
+  </div>
+</div>
 
 <!-- ÉCRAN GPS -->
 <div class="screen" id="scrGps">
@@ -1184,8 +1224,200 @@ let db=null;
 function openDB(){return new Promise((res,rej)=>{try{const r=indexedDB.open('traceo',1);r.onupgradeneeded=e=>{try{e.target.result.createObjectStore('layers',{keyPath:'id'});}catch(e){}};r.onsuccess=e=>{db=e.target.result;res(db);};r.onerror=()=>rej(r.error);}catch(e){rej(e);}});}
 function loadDB(){openDB().then(()=>{try{const tx=db.transaction('layers','readonly'),req=tx.objectStore('layers').getAll();req.onsuccess=()=>{const saved=req.result||[];saved.forEach(d=>{try{const color=COLORS[d.type];let ml;if(d.type==='line')ml=L.polyline(d.geom,{color,weight:3});else if(d.type==='zone')ml=L.polygon(d.geom,{color,weight:2,fillOpacity:.18});else{const ico=L.divIcon({className:'',html:'<div class="point-marker"></div>',iconSize:[18,18],iconAnchor:[9,18]});ml=L.marker(d.geom[0],{icon:ico});}ml.bindPopup(`<b>${d.attrs.name}</b>`).addTo(map);layers.push({...d,ml});}catch(e){}});if(saved.length){renderLayers();toast('📂 '+saved.length+' couche(s) restaurée(s)');}};req.onerror=()=>{};}catch(e){}}).catch(()=>{});}
 
-// ── INIT ──────────────────────────────────────────────────────
+// ── PIN ───────────────────────────────────────────────────────
+const PIN_KEY = 'traceo_pin_v2';
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS = 5 * 60 * 1000; // 5 min
+let pinMode = 'check'; // 'check' | 'create' | 'confirm'
+let pinFirst = '';
+
+const store = {
+  get(k)    { try { return localStorage.getItem(k); }    catch(e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); }        catch(e) {} },
+  del(k)    { try { localStorage.removeItem(k); }        catch(e) {} }
+};
+
+function hashPin(s) {
+  // FNV-1a 32bit — suffisant pour un PIN local
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+
+function validatePinFormat(s) {
+  if (s.length < 8) return null;
+  const hasDigit  = /\d/.test(s);
+  const hasLetter = /[a-zA-Z]/.test(s);
+  if (!hasDigit)  return 'Au moins 1 chiffre requis';
+  if (!hasLetter) return 'Au moins 1 lettre requise';
+  return true; // valide
+}
+
+function updateStrength(val) {
+  const fill = document.getElementById('pinFill');
+  const n = val.length;
+  const hasD = /\d/.test(val), hasL = /[a-zA-Z]/.test(val), hasU = /[A-Z]/.test(val);
+  let score = 0;
+  if (n >= 4) score++;
+  if (n >= 8) score++;
+  if (hasD && hasL) score++;
+  if (hasU) score++;
+  const pct = (score / 4) * 100;
+  const col = score <= 1 ? 'var(--red)' : score <= 2 ? 'var(--amber)' : 'var(--green)';
+  fill.style.width = pct + '%';
+  fill.style.background = col;
+}
+
+function pinErr(msg) {
+  const inp = document.getElementById('pinInput');
+  document.getElementById('pinErr').textContent = msg;
+  inp.classList.add('err');
+  setTimeout(() => inp.classList.remove('err'), 500);
+}
+
+function pinOk() {
+  document.getElementById('pinErr').textContent = '';
+  document.getElementById('pinInput').classList.add('ok');
+}
+
+function checkLockout() {
+  const lockUntil = parseInt(store.get('traceo_lock') || '0');
+  if (Date.now() < lockUntil) {
+    const rem = Math.ceil((lockUntil - Date.now()) / 1000);
+    document.getElementById('pinAttempts').textContent = `🔒 Bloqué — réessayez dans ${rem}s`;
+    return true;
+  }
+  document.getElementById('pinAttempts').textContent = '';
+  return false;
+}
+
+function initPinScreen() {
+  const stored = store.get(PIN_KEY);
+  const input  = document.getElementById('pinInput');
+  const sub    = document.getElementById('pinSub');
+  const rules  = document.getElementById('pinRules');
+  const resetBtn = document.getElementById('btnPinReset');
+
+  if (!stored) {
+    pinMode = 'create';
+    sub.textContent = 'Créez votre code d\'accès';
+    rules.innerHTML = '<b>Règles :</b> 8 caractères · au moins 1 chiffre · au moins 1 lettre';
+    resetBtn.style.display = 'none';
+  } else {
+    pinMode = 'check';
+    sub.textContent = 'Entrez votre code d\'accès';
+    rules.style.display = 'none';
+    document.getElementById('pinFill').parentElement.style.display = 'none';
+    resetBtn.style.display = 'block';
+  }
+
+  // Œil — afficher/masquer
+  document.getElementById('pinEye').addEventListener('click', () => {
+    input.type = input.type === 'password' ? 'text' : 'password';
+    document.getElementById('pinEye').textContent = input.type === 'password' ? '👁' : '🙈';
+  });
+
+  // Mise à jour force en temps réel
+  input.addEventListener('input', () => {
+    updateStrength(input.value);
+    document.getElementById('pinErr').textContent = '';
+    input.classList.remove('err', 'ok');
+    // Forcer majuscules
+    const pos = input.selectionStart;
+    input.value = input.value.toUpperCase();
+    input.setSelectionRange(pos, pos);
+  });
+
+  // Valider sur Entrée
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') submitPin(); });
+
+  // Bouton valider
+  document.getElementById('btnPinOk').addEventListener('click', submitPin);
+
+  // Bouton reset
+  resetBtn.addEventListener('click', () => {
+    if (confirm('Supprimer le code ? Vous devrez en créer un nouveau.')) {
+      store.del(PIN_KEY);
+      store.del('traceo_attempts');
+      store.del('traceo_lock');
+      location.reload();
+    }
+  });
+}
+
+function submitPin() {
+  if (checkLockout()) return;
+  const val = document.getElementById('pinInput').value.toUpperCase().trim();
+
+  if (pinMode === 'create') {
+    const check = validatePinFormat(val);
+    if (check !== true) { pinErr(check || 'Code trop court (8 caractères minimum)'); return; }
+    pinFirst = val;
+    pinMode  = 'confirm';
+    document.getElementById('pinSub').textContent = 'Confirmez votre code';
+    document.getElementById('pinInput').value = '';
+    document.getElementById('pinErr').textContent = '';
+    document.getElementById('pinFill').style.width = '0%';
+    document.getElementById('pinInput').focus();
+
+  } else if (pinMode === 'confirm') {
+    if (val !== pinFirst) {
+      pinMode = 'create';
+      pinFirst = '';
+      document.getElementById('pinSub').textContent = 'Créez votre code d\'accès';
+      document.getElementById('pinInput').value = '';
+      pinErr('Codes différents — recommencez');
+      return;
+    }
+    store.set(PIN_KEY, hashPin(val));
+    pinOk();
+    setTimeout(pinSuccess, 400);
+
+  } else { // check
+    const stored = store.get(PIN_KEY);
+    if (hashPin(val) === stored) {
+      store.del('traceo_attempts');
+      store.del('traceo_lock');
+      pinOk();
+      setTimeout(pinSuccess, 300);
+    } else {
+      let attempts = parseInt(store.get('traceo_attempts') || '0') + 1;
+      store.set('traceo_attempts', attempts);
+      const rem = MAX_ATTEMPTS - attempts;
+      if (attempts >= MAX_ATTEMPTS) {
+        store.set('traceo_lock', Date.now() + LOCKOUT_MS);
+        store.del('traceo_attempts');
+        pinErr('Trop de tentatives — bloqué 5 minutes');
+        document.getElementById('pinAttempts').textContent = '🔒 Bloqué 5 minutes';
+      } else {
+        pinErr(`Code incorrect — ${rem} essai(s) restant(s)`);
+      }
+      document.getElementById('pinInput').value = '';
+    }
+  }
+}
+
+function pinSuccess() {
+  document.getElementById('scrPin').classList.add('hidden');
+  // Afficher l'écran GPS ou directement l'app si GPS déjà autorisé
+  const gpsScreen = document.getElementById('scrGps');
+  if (!gpsScreen.classList.contains('hidden')) {
+    // L'écran GPS est encore visible — normal
+  }
+}
+
+// ── INIT ───────────────────────────────────────────────────────
 function init() {
+  initPinScreen();
+  // Focus automatique sur le champ PIN
+  setTimeout(() => {
+    const inp = document.getElementById('pinInput');
+    if (inp) inp.focus();
+  }, 300);
+
   renderCtrl();
   renderLayers();
   loadDB();
