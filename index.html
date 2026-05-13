@@ -733,7 +733,13 @@ header{background:var(--surf);border-bottom:1px solid var(--border);padding:10px
 .tab.active::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--blue);}
 .tab[data-m="zone"].active::after{background:var(--purple);}
 .tab[data-m="point"].active::after{background:var(--amber);}
-.controls{padding:10px 14px;display:flex;gap:8px;align-items:center;}
+.controls{padding:10px 14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.width-row{display:flex;align-items:center;gap:6px;width:100%;padding:0 0 4px;}
+.width-row label{font-size:.72rem;color:var(--muted);white-space:nowrap;}
+.width-input{width:70px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.84rem;font-weight:700;padding:6px 8px;text-align:center;-webkit-appearance:none;}
+.width-input:focus{outline:none;border-color:var(--blue);}
+.width-preview{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;position:relative;}
+.width-preview-fill{height:100%;background:var(--blue);border-radius:3px;transition:width .2s;}
 .btn{border:none;border-radius:6px;font-size:0.8rem;font-weight:700;padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:6px;-webkit-appearance:none;}
 .btn-go{background:var(--green);color:#0d1117;flex:1;justify-content:center;}
 .btn-go.rec{background:var(--red);color:#fff;}
@@ -898,6 +904,39 @@ let layersOpen = false;
 const COLORS = { line:'#58a6ff', zone:'#bc8cff', point:'#d29922' };
 const PRJ = 'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]';
 
+// Largeur de travail (mètres) — 0 = tracé simple
+let workWidth = 0;
+
+// Convertit des mètres en pixels Leaflet au zoom actuel et à une latitude donnée
+function metersToPixels(meters, lat) {
+  const zoom = map.getZoom();
+  // Résolution en mètres/pixel à ce zoom et cette latitude
+  const resolution = (2 * Math.PI * 6378137 * Math.cos(lat * Math.PI / 180)) / (256 * Math.pow(2, zoom));
+  return meters / resolution;
+}
+
+// Calcule le weight en pixels pour la polyligne d'aperçu
+function lineWeight() {
+  if (!workWidth || currentCoords.length === 0) return 3;
+  const midLat = currentCoords[Math.floor(currentCoords.length / 2)][0];
+  return Math.max(3, metersToPixels(workWidth, midLat));
+}
+
+// Recalcule le weight quand le zoom change
+function updateLineWeight() {
+  if (currentLayer && pendingType !== 'zone' && workWidth > 0 && currentCoords.length > 0) {
+    currentLayer.setStyle({ weight: lineWeight() });
+  }
+  // Aussi mettre à jour les couches sauvegardées
+  layers.forEach(l => {
+    if (l.type === 'line' && l.attrs.width > 0 && l.ml && l.ml.setStyle) {
+      const midLat = l.geom[Math.floor(l.geom.length/2)][0];
+      const w = Math.max(3, metersToPixels(l.attrs.width, midLat));
+      l.ml.setStyle({ weight: w });
+    }
+  });
+}
+
 // ── CARTE ─────────────────────────────────────────────────────
 const map = L.map('map', { center:[46.8,2.3], zoom:6, zoomControl:true });
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:22}).addTo(map);
@@ -976,8 +1015,16 @@ function capturePoint() {
 function drawCurrent() {
   clearCurrent();
   if (currentCoords.length < 2) return;
-  if (mode==='line') currentLayer = L.polyline(currentCoords,{color:COLORS.line,weight:3,dashArray:'6,4'}).addTo(map);
-  else currentLayer = L.polygon(currentCoords,{color:COLORS.zone,weight:2,fillOpacity:.12,dashArray:'6,4'}).addTo(map);
+  if (mode==='line') {
+    const w = workWidth > 0 ? Math.max(3, lineWeight()) : 3;
+    currentLayer = L.polyline(currentCoords, {
+      color: COLORS.line, weight: w,
+      dashArray: workWidth > 0 ? null : '6,4',
+      opacity: workWidth > 0 ? 0.55 : 0.9
+    }).addTo(map);
+  } else {
+    currentLayer = L.polygon(currentCoords,{color:COLORS.zone,weight:2,fillOpacity:.12,dashArray:'6,4'}).addTo(map);
+  }
 }
 
 function clearCurrent() {
@@ -1003,14 +1050,22 @@ function saveLayer() {
     prod:  document.getElementById('aProd').value,
     dose:  document.getElementById('aDose').value,
     notes: document.getElementById('aNotes').value,
-    date:  new Date().toISOString()
+    date:  new Date().toISOString(),
+    width: pendingType === 'line' ? workWidth : 0
   };
   const color = COLORS[pendingType];
   let ml;
-  if (pendingType==='line')       ml = L.polyline(pendingGeom, {color, weight:3});
+  if (pendingType==='line') {
+    const midLat = pendingGeom[Math.floor(pendingGeom.length/2)][0];
+    const w = attrs.width > 0 ? Math.max(3, metersToPixels(attrs.width, midLat)) : 3;
+    ml = L.polyline(pendingGeom, {
+      color, weight: w,
+      opacity: attrs.width > 0 ? 0.55 : 0.9
+    });
+  }
   else if (pendingType==='zone')  ml = L.polygon(pendingGeom,  {color, weight:2, fillOpacity:.18});
   else { const ico = L.divIcon({className:'',html:'<div class="point-marker"></div>',iconSize:[18,18],iconAnchor:[9,18]}); ml = L.marker(pendingGeom[0],{icon:ico}); }
-  ml.bindPopup(`<b>${attrs.name}</b><br>${attrs.type}<br><small>${attrs.prod} ${attrs.dose}</small>`).addTo(map);
+  ml.bindPopup(`<b>${attrs.name}</b><br>${attrs.type}${attrs.width > 0 ? '<br>🔧 Largeur : <b>'+attrs.width+'m</b>' : ''}<br><small>${attrs.prod} ${attrs.dose}</small>`).addTo(map);
   const layer = {id:Date.now(), type:pendingType, geom:pendingGeom, attrs, color, ml};
   layers.push(layer);
   try {
@@ -1056,8 +1111,24 @@ function setMode(m) {
 function renderCtrl() {
   const c = document.getElementById('controls');
   if (mode==='line') {
-    c.innerHTML=`<button class="btn btn-go" id="btnRecord">⏺ Démarrer le tracé</button>
-                 <button class="btn btn-sec" id="btnStop" disabled>⏹ Terminer</button>`;
+    c.innerHTML=`
+      <div class="width-row">
+        <label>🔧 Largeur de travail :</label>
+        <input class="width-input" id="widthInput" type="number" min="0" max="50" step="0.5"
+          value="${workWidth||''}" placeholder="m">
+        <span style="font-size:.7rem;color:var(--muted)">m</span>
+        <div class="width-preview"><div class="width-preview-fill" id="widthFill" style="width:${Math.min(100,((workWidth||0)/30)*100)}%"></div></div>
+        <span id="widthVal" style="font-size:.7rem;color:var(--blue);white-space:nowrap;min-width:36px">${workWidth?workWidth+'m':'—'}</span>
+      </div>
+      <button class="btn btn-go" id="btnRecord">⏺ Démarrer le tracé</button>
+      <button class="btn btn-sec" id="btnStop" disabled>⏹ Terminer</button>`;
+    document.getElementById('widthInput').addEventListener('input', e => {
+      workWidth = parseFloat(e.target.value) || 0;
+      const pct = Math.min(100, (workWidth / 30) * 100);
+      document.getElementById('widthFill').style.width = pct + '%';
+      document.getElementById('widthVal').textContent = workWidth ? workWidth + 'm' : '—';
+      if (recording) drawCurrent(); // redessiner en temps réel
+    });
     document.getElementById('btnRecord').addEventListener('click', ()=>{ recording?stopRec():startRec(); });
     document.getElementById('btnStop').addEventListener('click', stopRec);
   } else if (mode==='zone') {
@@ -1069,6 +1140,42 @@ function renderCtrl() {
     c.innerHTML=`<button class="btn btn-amber btn">📍 Capturer ce point</button>`;
     c.querySelector('.btn-amber').addEventListener('click', capturePoint);
   }
+}
+
+// ── BUFFER LIGNE (surface travaillée) ─────────────────────────
+// Génère un polygone autour d'une polyligne avec une demi-largeur en mètres
+function bufferLine(coords, halfWidthM) {
+  if (coords.length < 2 || halfWidthM <= 0) return null;
+
+  // Conversion degrés → mètres approx à la latitude moyenne
+  const midLat = coords[Math.floor(coords.length/2)][0];
+  const mPerDegLat = 111320;
+  const mPerDegLon = 111320 * Math.cos(midLat * Math.PI / 180);
+  const dLat = halfWidthM / mPerDegLat;
+  const dLon = halfWidthM / mPerDegLon;
+
+  const left = [], right = [];
+
+  for (let i = 0; i < coords.length; i++) {
+    // Vecteur tangent
+    const prev = coords[Math.max(0, i-1)];
+    const next = coords[Math.min(coords.length-1, i+1)];
+    let dx = (next[1] - prev[1]) * mPerDegLon;
+    let dy = (next[0] - prev[0]) * mPerDegLat;
+    const len = Math.sqrt(dx*dx + dy*dy) || 1;
+    dx /= len; dy /= len;
+    // Perpendiculaire
+    const nx =  dy / mPerDegLon;
+    const ny = -dx / mPerDegLat;
+    left.push( [coords[i][0] + ny * halfWidthM / mPerDegLat,
+                coords[i][1] + nx * halfWidthM / mPerDegLon]);
+    right.push([coords[i][0] - ny * halfWidthM / mPerDegLat,
+                coords[i][1] - nx * halfWidthM / mPerDegLon]);
+  }
+
+  // Polygone = côté gauche + côté droit inversé + fermeture
+  const ring = [...left, ...[...right].reverse(), left[0]];
+  return ring; // tableau de [lat, lon]
 }
 
 // ── EXPORT ────────────────────────────────────────────────────
@@ -1101,8 +1208,16 @@ function exportKML() {
 
 function exportSHP() {
   toast('Génération Shapefile…');
-  const byType = {point:[],line:[],zone:[]};
-  layers.forEach(l=>byType[l.type].push(l));
+  const byType = {point:[], line:[], lineBuffer:[], zone:[]};
+  layers.forEach(l => {
+    if (l.type === 'line' && l.attrs.width > 0) {
+      byType.lineBuffer.push(l); // ligne avec largeur → polygone buffer
+    } else if (l.type === 'line') {
+      byType.line.push(l);
+    } else {
+      byType[l.type].push(l);
+    }
+  });
   const files = [];
   function addGrp(grp, name, stype) {
     const recs = grp.map(l=>({pts: stype===1?[l.geom[0]]:l.geom, attrs:l.attrs}));
@@ -1111,10 +1226,28 @@ function exportSHP() {
     files.push({name:name+'.dbf', data:buildDBF(recs.map(r=>r.attrs))});
     files.push({name:name+'.prj', data:PRJ});
   }
-  if(byType.point.length) addGrp(byType.point,'points',1);
-  if(byType.line.length)  addGrp(byType.line,'lignes',3);
-  if(byType.zone.length)  addGrp(byType.zone,'zones',5);
-  files.push({name:'README.txt', data:'TracéO Export\nDate: '+new Date().toLocaleString('fr-FR')+'\nEPSG:4326 WGS84'});
+  if (byType.point.length)  addGrp(byType.point,  'points', 1);
+  if (byType.line.length)   addGrp(byType.line,   'lignes', 3);
+  if (byType.zone.length)   addGrp(byType.zone,   'zones',  5);
+  // Lignes avec largeur → polygones buffer (type 5)
+  if (byType.lineBuffer.length) {
+    const bufRecs = byType.lineBuffer.map(l => {
+      const buf = bufferLine(l.geom, l.attrs.width / 2);
+      return { pts: buf || l.geom, attrs: {...l.attrs, notes: (l.attrs.notes||'') + ` [largeur:${l.attrs.width}m]`} };
+    });
+    files.push({name:'surfaces_travaillees.shp', data:buildSHP(bufRecs,5)});
+    files.push({name:'surfaces_travaillees.shx', data:buildSHX(bufRecs,5)});
+    files.push({name:'surfaces_travaillees.dbf', data:buildDBF(bufRecs.map(r=>r.attrs))});
+    files.push({name:'surfaces_travaillees.prj', data:PRJ});
+  }
+  files.push({name:'README.txt', data:
+    'TracéO Export Shapefile\nDate: '+new Date().toLocaleString('fr-FR')+
+    '\nEPSG:4326 WGS84\n\n'+
+    'points.* : Points d\'intervention\n'+
+    'lignes.* : Tracés sans largeur définie\n'+
+    'zones.* : Zones de surface\n'+
+    'surfaces_travaillees.* : Polygones buffer (tracés avec largeur de travail)'
+  });
   const zip = MiniZip.build(files);
   dl('traces_terrain_shp.zip', zip, 'application/zip');
   toast('✓ Shapefile ZIP téléchargé');
@@ -1421,6 +1554,9 @@ function init() {
   renderCtrl();
   renderLayers();
   loadDB();
+
+  // Recalcul largeur au zoom
+  map.on('zoomend', updateLineWeight);
 
   // Tabs
   document.getElementById('tabs').addEventListener('click', e=>{
