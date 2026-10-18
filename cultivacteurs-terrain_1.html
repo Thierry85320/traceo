@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2c6a4a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>CultivActeurs Terrain</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+:root{--vert:#2c6a4a;--vert2:#3f8a62;--vert-pale:#e3efe6;--creme:#f7f5ef;--texte:#1f251d;--gris:#6b7266;--ligne:#d9dccf;--rouge:#b0281e;--rouge-pale:#f6dfdc;--ocre:#b07a1c;--ocre-pale:#f4e9cf;--blanc:#fff}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--creme);color:var(--texte);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+header{position:sticky;top:0;z-index:20;background:var(--vert);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:10px}
+header h1{font-size:1.05rem;margin:0;flex:1;line-height:1.2}
+header small{display:block;font-weight:400;opacity:.85;font-size:.78rem}
+header button{background:rgba(255,255,255,.15);border:0;color:#fff;border-radius:8px;padding:8px 10px;font-size:.9rem}
+main{padding:14px 14px 110px;max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.card{background:var(--blanc);border:1px solid var(--ligne);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.card h2{font-size:1rem;margin:0}
+.muted{color:var(--gris)}.small{font-size:.85rem}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:.85rem;font-weight:600;color:#3c4339}
+input,select,textarea{font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--ligne);border-radius:9px;background:#fff;color:var(--texte);width:100%}
+textarea{min-height:70px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--vert2);outline-offset:0;border-color:var(--vert2)}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1 1 140px}
+.btn{font:inherit;font-weight:600;border:1px solid var(--ligne);background:#fff;color:var(--texte);border-radius:10px;padding:12px 14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:46px}
+.btn.primary{background:var(--vert);border-color:var(--vert);color:#fff}
+.btn.danger{background:var(--rouge);border-color:var(--rouge);color:#fff}
+.btn.big{font-size:1.05rem;padding:16px;width:100%}
+.btn:disabled{opacity:.45}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--vert)}
+.pill{display:inline-block;font-size:.75rem;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--vert-pale);color:var(--vert)}
+.pill.warn{background:var(--ocre-pale);color:var(--ocre)}.pill.bad{background:var(--rouge-pale);color:var(--rouge)}
+.rec{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--ligne)}
+.rec:first-child{border-top:0}
+.rec .t{flex:1;min-width:0}.rec .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prod{display:grid;grid-template-columns:auto 1fr 96px 64px;gap:8px;align-items:center;padding:8px 0;border-top:1px dashed var(--ligne)}
+.prod:first-child{border-top:0}
+.prod input[type=checkbox]{width:22px;height:22px}
+.prod input[type=text],.prod input[inputmode]{padding:8px}
+.gps{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+.gps div{background:var(--creme);border-radius:8px;padding:8px 4px}
+.gps b{display:block;font-size:1.05rem}.gps span{font-size:.72rem;color:var(--gris)}
+#map{position:relative;z-index:0;isolation:isolate;height:240px;border-radius:10px;border:1px solid var(--ligne);background:#e9ece3}
+.rec-dot{width:12px;height:12px;border-radius:50%;background:var(--rouge);display:inline-block;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.25}}
+.bar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--ligne);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;z-index:30}
+.bar .btn{flex:1}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--texte);color:#fff;padding:10px 16px;border-radius:10px;font-size:.9rem;z-index:50;max-width:90%;text-align:center}
+.notice{background:var(--ocre-pale);border-radius:9px;padding:10px 12px;font-size:.88rem}
+.notice.ok{background:var(--vert-pale)}
+.hide{display:none!important}
+dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0;font-size:.92rem}dt{color:var(--gris)}dd{margin:0;font-weight:600}
+@media (prefers-color-scheme:dark){:root{--creme:#151915;--texte:#e8ebe4;--gris:#a3aa9d;--ligne:#353b32;--blanc:#1e231d;--vert-pale:#21352a;--ocre-pale:#3a2f17;--rouge-pale:#3e1f1b}input,select,textarea,.btn{background:#1b201a;color:var(--texte)}.bar{background:#1b201a}}
+</style>
+</head>
+<body>
+<header><h1 id="h-title">CultivActeurs Terrain<small id="h-sub">Enregistrement des applications</small></h1><button id="b-home" class="hide" type="button" aria-label="Retour à l'accueil">← Accueil</button></header>
+<main id="main"></main>
+<div class="bar hide" id="bar"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+'use strict';
+const APP_V = '1.0';
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const num = (v) => { if (v == null || v === '') return null; const n = +String(v).replace(',', '.').replace(/\s/g, ''); return isFinite(n) ? n : null; };
+const fmt = (v, d = 0) => v == null || !isFinite(v) ? '–' : v.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const store = { get(k, d) { try { const v = localStorage.getItem('cat_' + k); return v ? JSON.parse(v) : d; } catch (_) { return d; } }, set(k, v) { try { localStorage.setItem('cat_' + k, JSON.stringify(v)); } catch (_) { toast('Mémoire du téléphone pleine : envoyez puis supprimez d\'anciens enregistrements'); } } };
+function toast(m) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3200); }
+
+/* ---------- configuration (lien envoyé par CAVAC : #cfg=…) ---------- */
+function b64urlDecode(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; const bin = atob(s); const bytes = Uint8Array.from(bin, c => c.charCodeAt(0)); return new TextDecoder().decode(bytes); }
+function readHashConfig() {
+  const m = location.hash.match(/cfg=([A-Za-z0-9_\-]+)/); if (!m) return;
+  try {
+    const c = JSON.parse(b64urlDecode(m[1]));
+    if (!c || !c.agri) throw new Error('lien incomplet');
+    store.set('cfg', c); history.replaceState(null, '', location.pathname + location.search);
+    toast('Configuration reçue : ' + c.agri);
+  } catch (e) { toast('Lien de configuration illisible'); }
+}
+let CFG = null, RECS = [], CUR = null, VIEW = 'home';
+function load() { CFG = store.get('cfg', null); RECS = store.get('recs', []); CUR = store.get('draft', null); }
+const saveRecs = () => store.set('recs', RECS);
+const saveDraft = () => store.set('draft', CUR);
+
+/* ---------- GPS ---------- */
+const GPS = { watch: null, last: null, tracing: false, paused: false, wake: null, maxAcc: 30, minMove: 2 };
+function haversine(a, b) { const R = 6371000, r = Math.PI / 180; const dLa = (b[1] - a[1]) * r, dLo = (b[0] - a[0]) * r; const h = Math.sin(dLa / 2) ** 2 + Math.cos(a[1] * r) * Math.cos(b[1] * r) * Math.sin(dLo / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); }
+function traceLength(tr) { let d = 0; for (let i = 1; i < tr.length; i++) if (tr[i][4] !== 1) d += haversine(tr[i - 1], tr[i]); return d; } // [lon,lat,t,acc,breakFlag]
+function startWatch() {
+  if (!('geolocation' in navigator)) { toast('GPS indisponible sur cet appareil'); return; }
+  if (GPS.watch != null) return;
+  GPS.watch = navigator.geolocation.watchPosition(onPos, (err) => { GPS.last = null; updGps(err.code === 1 ? 'Autorisez la localisation dans les réglages du navigateur' : 'Signal GPS indisponible'); }, { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
+}
+function stopWatch() { if (GPS.watch != null) navigator.geolocation.clearWatch(GPS.watch); GPS.watch = null; }
+function onPos(p) {
+  const pt = [+p.coords.longitude.toFixed(7), +p.coords.latitude.toFixed(7), Date.now(), Math.round(p.coords.accuracy)];
+  GPS.last = pt;
+  if (CUR && GPS.tracing && !GPS.paused && pt[3] <= GPS.maxAcc) {
+    const tr = CUR.trace, prev = tr[tr.length - 1];
+    if (!prev || haversine(prev, pt) >= GPS.minMove) { if (GPS.resume) { pt[4] = 1; GPS.resume = false; } tr.push(pt); saveDraft(); }
+  }
+  updGps(); drawMap();
+}
+async function wakeOn() { try { if ('wakeLock' in navigator) GPS.wake = await navigator.wakeLock.request('screen'); } catch (_) { } }
+function wakeOff() { try { GPS.wake && GPS.wake.release(); } catch (_) { } GPS.wake = null; }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && GPS.tracing && !GPS.paused) wakeOn(); });
+
+/* ---------- carte (si réseau) ---------- */
+let MAP = null, LYR = null;
+function drawMap() {
+  const el = $('#map'); if (!el || typeof L === 'undefined' || !CUR) { if (el && typeof L === 'undefined') el.innerHTML = '<p class="small muted" style="padding:12px">Carte indisponible hors réseau — l\'enregistrement GPS fonctionne quand même.</p>'; return; }
+  if (!MAP || MAP._container !== el) {
+    MAP = L.map(el, { zoomControl: true, attributionControl: false });
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 20 }).addTo(MAP);
+    LYR = L.layerGroup().addTo(MAP); MAP.setView([46.6, -1.2], 12);
+  }
+  LYR.clearLayers();
+  const segs = []; let s = [];
+  CUR.trace.forEach(p => { if (p[4] === 1 && s.length) { segs.push(s); s = []; } s.push([p[1], p[0]]); }); if (s.length) segs.push(s);
+  segs.forEach(sg => L.polyline(sg, { color: '#ffd23f', weight: 4 }).addTo(LYR));
+  CUR.points.forEach((p, i) => L.circleMarker([p[1], p[0]], { radius: 7, color: '#fff', weight: 2, fillColor: '#b0281e', fillOpacity: 1 }).bindTooltip(p[4] || ('Point ' + (i + 1))).addTo(LYR));
+  if (GPS.last) L.circleMarker([GPS.last[1], GPS.last[0]], { radius: 6, color: '#fff', weight: 2, fillColor: '#1d6fd8', fillOpacity: 1 }).addTo(LYR);
+  const all = [...CUR.trace, ...CUR.points].map(p => [p[1], p[0]]);
+  if (all.length > 1) MAP.fitBounds(all, { padding: [20, 20], maxZoom: 19 }); else if (GPS.last) MAP.setView([GPS.last[1], GPS.last[0]], 18);
+}
+
+/* ---------- écrans ---------- */
+function header() {
+  $('#h-title').innerHTML = `CultivActeurs Terrain<small>${CFG ? esc(CFG.agri) : 'Enregistrement des applications'}</small>`;
+  $('#b-home').classList.toggle('hide', VIEW === 'home');
+}
+function render() { header(); ({ home: vHome, setup: vSetup, form: vForm, detail: vDetail }[VIEW] || vHome)(); window.scrollTo(0, 0); }
+
+function vSetup() {
+  const c = CFG || { agri: '', largeur: '', dest: '', essais: [] };
+  $('#main').innerHTML = `<div class="card"><h2>Votre exploitation</h2>
+    <p class="small muted">Normalement, CAVAC vous envoie un lien qui remplit cet écran et la liste de vos essais. Sinon, saisissez au moins le nom de l'exploitation.</p>
+    <label class="f">Nom de l'exploitation<input id="s-agri" value="${esc(c.agri)}" autocomplete="organization"></label>
+    <label class="f">Largeur de travail habituelle (m)<input id="s-larg" inputmode="decimal" value="${esc(c.largeur ?? '')}"></label>
+    <label class="f">Envoyer les enregistrements à (e-mail CAVAC)<input id="s-dest" type="email" value="${esc(c.dest || '')}" placeholder="prenom.nom@cavac.fr"></label>
+    <button class="btn primary big" id="s-ok" type="button">Enregistrer</button></div>`;
+  $('#bar').classList.add('hide');
+  $('#s-ok').onclick = () => {
+    const agri = $('#s-agri').value.trim(); if (!agri) return toast('Indiquez le nom de l\'exploitation');
+    CFG = { ...(CFG || { v: 1, essais: [] }), agri, largeur: num($('#s-larg').value), dest: $('#s-dest').value.trim() }; store.set('cfg', CFG); VIEW = 'home'; render();
+  };
+}
+
+function recLabel(r) { const e = (CFG?.essais || []).find(x => x.id === r.essai.id); return (r.produits.map(p => p.produit).join(' + ') || 'Application') + ' — ' + (e?.nom || r.essai.nom || r.essai.id || 'essai libre'); }
+function vHome() {
+  if (!CFG) { VIEW = 'setup'; return vSetup(); }
+  const unsent = RECS.filter(r => !r.sentAt);
+  $('#main').innerHTML = `
+    ${CUR ? `<div class="notice">Un enregistrement est en cours (${fmt(CUR.trace.length)} points de trace). <button class="btn ghost" id="b-resume" type="button">Reprendre</button></div>` : ''}
+    <button class="btn primary big" id="b-new" type="button">＋ Nouvelle application</button>
+    <div class="card"><h2>Mes enregistrements</h2>
+      ${RECS.length ? RECS.slice().reverse().map(r => `<div class="rec" data-id="${r.uid}"><div class="t"><b>${esc(recLabel(r))}</b><span class="small muted">${new Date(r.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} · ${r.parcelle ? esc(r.parcelle) + ' · ' : ''}${r.trace.length ? fmt(r.distance) + ' m' : r.points.length ? r.points.length + ' point(s)' : 'sans GPS'}</span></div>${r.sentAt ? '<span class="pill">envoyé</span>' : '<span class="pill warn">à envoyer</span>'}</div>`).join('') : '<p class="small muted">Aucun enregistrement pour l\'instant.</p>'}
+    </div>
+    ${(CFG.essais || []).length ? `<div class="card"><h2>Mes essais CultivActeurs</h2>${CFG.essais.map(e => `<div class="small"><b>${esc(e.nom || e.id)}</b>${e.cu ? ' · ' + esc(e.cu) : ''}<br><span class="muted">${(e.p || []).map(p => esc(p[1]) + (p[2] != null ? ' ' + fmt(p[2], p[2] % 1 ? 2 : 0) + ' ' + esc(p[3] || '') + '/ha' : '')).join(' · ')}</span></div>`).join('<hr style="border:0;border-top:1px solid var(--ligne);margin:4px 0">')}</div>` : ''}
+    <div class="row"><button class="btn" id="b-setup" type="button">⚙️ Mon exploitation</button></div>
+    <p class="small muted" style="text-align:center">Les données restent sur ce téléphone jusqu'à leur envoi. v${APP_V}</p>`;
+  const bar = $('#bar');
+  if (unsent.length) { bar.innerHTML = `<button class="btn primary" id="b-sendall" type="button">📤 Envoyer ${unsent.length} enregistrement(s)</button>`; bar.classList.remove('hide'); $('#b-sendall').onclick = () => sendRecords(unsent); }
+  else bar.classList.add('hide');
+  $('#b-new').onclick = () => { if (CUR && !confirm('Un enregistrement est en cours. L\'abandonner pour en commencer un nouveau ?')) return; newDraft(); VIEW = 'form'; render(); };
+  $('#b-setup').onclick = () => { VIEW = 'setup'; render(); };
+  if ($('#b-resume')) $('#b-resume').onclick = () => { VIEW = 'form'; render(); };
+  document.querySelectorAll('.rec').forEach(el => el.onclick = () => { VIEW = 'detail'; DETAIL = el.dataset.id; render(); });
+}
+function toLocalInput(d) { const z = new Date(d - new Date(d).getTimezoneOffset() * 60000); return z.toISOString().slice(0, 16); }
+function newDraft() {
+  CUR = { uid: uid(), date: Date.now(), essai: { id: CFG.essais?.[0]?.id || '' }, produits: [], parcelle: '', stade: '', largeur: CFG.largeur ?? null, bouillie: null, vent: '', temp: null, commentaire: '', trace: [], points: [] };
+  saveDraft();
+}
+function essaiOf(id) { return (CFG.essais || []).find(e => e.id === id); }
+function vForm() {
+  const e = essaiOf(CUR.essai.id);
+  const prods = e ? (e.p || []) : [];
+  const sel = (i) => CUR.produits.find(p => p.i === i);
+  $('#main').innerHTML = `
+  <div class="card"><h2>Essai et produit</h2>
+    <label class="f">Essai<select id="f-essai">${(CFG.essais || []).map(x => `<option value="${esc(x.id)}" ${x.id === CUR.essai.id ? 'selected' : ''}>${esc(x.nom || x.id)}</option>`).join('')}<option value="__libre" ${!e ? 'selected' : ''}>Autre (saisie libre)</option></select></label>
+    ${e ? `<div><div class="small muted" style="margin-bottom:4px">Cochez le ou les produits appliqués ; corrigez la dose si besoin.</div>
+      ${prods.map((p, i) => { const s = sel(i); return `<div class="prod"><input type="checkbox" data-pi="${i}" ${s ? 'checked' : ''} aria-label="${esc(p[1])}"><div><b>${esc(p[1])}</b><div class="small muted">${p[0] ? 'Modalité ' + esc(p[0]) + ' · ' : ''}prévu ${p[2] != null ? fmt(p[2], p[2] % 1 ? 2 : 0) + ' ' + esc(p[3] || '') + '/ha' : '–'}</div></div><input inputmode="decimal" data-pd="${i}" value="${s ? esc(s.dose ?? '') : (p[2] ?? '')}" aria-label="Dose appliquée" ${s ? '' : 'disabled'}><input type="text" data-pu="${i}" value="${s ? esc(s.unite || '') : esc(p[3] || '')}" aria-label="Unité" ${s ? '' : 'disabled'}></div>`; }).join('')}</div>`
+    : `<label class="f">Nom de l'essai<input id="f-essai-libre" value="${esc(CUR.essai.nom || '')}"></label>
+       <div class="row"><label class="f">Produit<input id="f-prod-libre" value="${esc(CUR.produits[0]?.produit || '')}"></label><label class="f">Dose / ha<input id="f-dose-libre" inputmode="decimal" value="${esc(CUR.produits[0]?.dose ?? '')}"></label><label class="f">Unité<input id="f-unite-libre" value="${esc(CUR.produits[0]?.unite || 'l')}"></label></div>`}
+  </div>
+  <div class="card"><h2>Application</h2>
+    <div class="row"><label class="f">Date et heure<input id="f-date" type="datetime-local" value="${toLocalInput(CUR.date)}"></label><label class="f">Parcelle<input id="f-parcelle" value="${esc(CUR.parcelle)}" placeholder="ex. Champ du moulin"></label></div>
+    <div class="row"><label class="f">Stade de la culture<input id="f-stade" value="${esc(CUR.stade)}" placeholder="ex. 6 feuilles"></label><label class="f">Largeur de travail (m)<input id="f-larg" inputmode="decimal" value="${esc(CUR.largeur ?? '')}"></label></div>
+    <div class="row"><label class="f">Bouillie (l/ha)<input id="f-bouillie" inputmode="decimal" value="${esc(CUR.bouillie ?? '')}" placeholder="si pulvérisé"></label><label class="f">Vent<select id="f-vent">${['', 'nul', 'faible', 'moyen', 'fort'].map(v => `<option ${CUR.vent === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label><label class="f">T° (°C)<input id="f-temp" inputmode="decimal" value="${esc(CUR.temp ?? '')}"></label></div>
+    <label class="f">Commentaire<textarea id="f-com" placeholder="matériel, conditions, problème…">${esc(CUR.commentaire)}</textarea></label>
+  </div>
+  <div class="card"><h2>Position GPS ${GPS.tracing && !GPS.paused ? '<span class="rec-dot" aria-label="enregistrement en cours"></span>' : ''}</h2>
+    <div class="gps"><div><b id="g-pts">${CUR.trace.length}</b><span>points</span></div><div><b id="g-dist">${fmt(traceLength(CUR.trace))}</b><span>mètres</span></div><div><b id="g-surf">–</b><span>ha estimés</span></div><div><b id="g-acc">–</b><span>précision</span></div></div>
+    <p class="small muted" id="g-msg" style="margin:0"></p>
+    <div class="row">
+      ${!GPS.tracing ? `<button class="btn primary" id="g-start" type="button">▶ ${CUR.trace.length ? 'Reprendre la trace' : 'Démarrer la trace'}</button>`
+      : `<button class="btn" id="g-pause" type="button">${GPS.paused ? '▶ Reprendre' : '⏸ Pause'}</button><button class="btn danger" id="g-stop" type="button">⏹ Terminer la trace</button>`}
+      <button class="btn" id="g-point" type="button">📍 Marquer un point</button>
+    </div>
+    <div id="map"></div>
+    <p class="small muted" style="margin:0">Démarrez la trace à l'entrée de la zone traitée et terminez-la en sortie. Gardez l'écran allumé pendant la trace. Les positions moins précises que ${GPS.maxAcc} m sont ignorées.</p>
+    ${CUR.trace.length || CUR.points.length ? '<button class="btn ghost" id="g-clear" type="button">Effacer la trace et les points</button>' : ''}
+  </div>`;
+  const bar = $('#bar'); bar.innerHTML = `<button class="btn" id="f-cancel" type="button">Abandonner</button><button class="btn primary" id="f-save" type="button">✓ Enregistrer</button>`; bar.classList.remove('hide');
+  bindForm(); startWatch(); updGps(); setTimeout(drawMap, 50);
+}
+function readForm() {
+  const ev = $('#f-essai').value;
+  if (ev === '__libre') { CUR.essai = { id: '', nom: $('#f-essai-libre')?.value.trim() || '' }; const pr = $('#f-prod-libre')?.value.trim(); CUR.produits = pr ? [{ i: null, moda: '', produit: pr, dose_prevue: null, dose: num($('#f-dose-libre').value), unite: $('#f-unite-libre').value.trim() }] : []; }
+  else {
+    const e = essaiOf(ev); CUR.essai = { id: ev, nom: e?.nom || '' };
+    CUR.produits = [...document.querySelectorAll('[data-pi]')].filter(x => x.checked).map(x => { const i = +x.dataset.pi, p = e.p[i]; return { i, moda: p[0] || '', produit: p[1], dose_prevue: p[2] ?? null, dose: num($(`[data-pd="${i}"]`).value), unite: $(`[data-pu="${i}"]`).value.trim() }; });
+  }
+  const d = new Date($('#f-date').value); CUR.date = isNaN(d) ? Date.now() : d.getTime();
+  CUR.parcelle = $('#f-parcelle').value.trim(); CUR.stade = $('#f-stade').value.trim(); CUR.largeur = num($('#f-larg').value); CUR.bouillie = num($('#f-bouillie').value);
+  CUR.vent = $('#f-vent').value; CUR.temp = num($('#f-temp').value); CUR.commentaire = $('#f-com').value.trim();
+  saveDraft();
+}
+$('#main').addEventListener('change', (ev) => {
+    if (VIEW !== 'form' || !CUR) return;
+    const t = ev.target;
+    if (t.id === 'f-essai') { readForm(); CUR.essai = { id: t.value === '__libre' ? '' : t.value }; CUR.produits = []; saveDraft(); return vForm(); }
+    if (t.dataset.pi != null) { const i = t.dataset.pi; $(`[data-pd="${i}"]`).disabled = !t.checked; $(`[data-pu="${i}"]`).disabled = !t.checked; }
+    readForm(); updGps();
+  });
+$('#main').addEventListener('input', () => { if (VIEW !== 'form' || !CUR) return; clearTimeout(window._ti); window._ti = setTimeout(() => { if (VIEW === 'form' && CUR) { readForm(); updGps(); } }, 400); });
+function bindForm() {
+  const on = (id, f) => { const el = $(id); if (el) el.onclick = f; };
+  on('#g-start', () => { readForm(); GPS.tracing = true; GPS.paused = false; GPS.resume = CUR.trace.length > 0; wakeOn(); startWatch(); vForm(); });
+  on('#g-pause', () => { GPS.paused = !GPS.paused; if (!GPS.paused) { GPS.resume = true; wakeOn(); } else wakeOff(); readForm(); vForm(); });
+  on('#g-stop', () => { GPS.tracing = false; GPS.paused = false; wakeOff(); readForm(); vForm(); toast('Trace terminée : ' + fmt(traceLength(CUR.trace)) + ' m'); });
+  on('#g-point', () => { if (!GPS.last) return toast('Position GPS pas encore disponible'); const name = prompt('Nom du point (facultatif)', 'Point ' + (CUR.points.length + 1)); if (name === null) return; CUR.points.push([...GPS.last.slice(0, 4), name || 'Point ' + (CUR.points.length + 1)]); readForm(); updGps(); drawMap(); toast('Point enregistré (±' + GPS.last[3] + ' m)'); });
+  on('#g-clear', () => { if (!confirm('Effacer la trace et les points GPS ?')) return; CUR.trace = []; CUR.points = []; readForm(); vForm(); });
+  on('#f-cancel', () => { if (!confirm('Abandonner cet enregistrement ?')) return; stopTrace(); CUR = null; store.set('draft', null); VIEW = 'home'; render(); });
+  on('#f-save', () => {
+    readForm();
+    if (CUR.essai.id && !CUR.produits.length) return toast('Cochez au moins un produit');
+    if (!CUR.essai.id && !CUR.produits.length && !CUR.essai.nom) return toast('Indiquez l\'essai ou le produit');
+    stopTrace();
+    const r = finalize(CUR); RECS.push(r); saveRecs(); CUR = null; store.set('draft', null);
+    toast('Enregistré sur le téléphone'); VIEW = 'detail'; DETAIL = r.uid; render();
+  });
+}
+function stopTrace() { GPS.tracing = false; GPS.paused = false; wakeOff(); stopWatch(); }
+function updGps(msg) {
+  if (!CUR || !$('#g-pts')) return;
+  const d = traceLength(CUR.trace), l = num($('#f-larg')?.value) ?? CUR.largeur;
+  $('#g-pts').textContent = fmt(CUR.trace.length); $('#g-dist').textContent = fmt(d);
+  $('#g-surf').textContent = l && d ? fmt(d * l / 10000, 2) : '–';
+  $('#g-acc').textContent = GPS.last ? '±' + GPS.last[3] + ' m' : '–';
+  $('#g-msg').textContent = msg || (GPS.last ? (GPS.last[3] > GPS.maxAcc ? 'Précision insuffisante, patientez à découvert…' : (GPS.tracing ? (GPS.paused ? 'Trace en pause' : 'Trace en cours…') : 'GPS prêt')) : 'Recherche du signal GPS…');
+}
+function finalize(c) {
+  const d = traceLength(c.trace);
+  return { ...c, type: 'cultivacteurs-application', v: 1, app: APP_V, agri: CFG.agri, distance: Math.round(d), surface: c.largeur && d ? +(d * c.largeur / 10000).toFixed(4) : null, duree: c.trace.length > 1 ? Math.round((c.trace[c.trace.length - 1][2] - c.trace[0][2]) / 1000) : null, savedAt: Date.now(), sentAt: null };
+}
+let DETAIL = null;
+function vDetail() {
+  const r = RECS.find(x => x.uid === DETAIL); if (!r) { VIEW = 'home'; return vHome(); }
+  $('#main').innerHTML = `<div class="card"><h2>${esc(recLabel(r))}</h2>
+    <dl><dt>Date</dt><dd>${new Date(r.date).toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' })}</dd>
+    ${r.produits.map(p => `<dt>${esc(p.produit)}</dt><dd>${p.dose != null ? fmt(p.dose, p.dose % 1 ? 2 : 0) + ' ' + esc(p.unite) + '/ha' : '–'}${p.dose_prevue != null && p.dose !== p.dose_prevue ? ` <span class="pill warn">prévu ${fmt(p.dose_prevue, p.dose_prevue % 1 ? 2 : 0)}</span>` : ''}</dd>`).join('')}
+    ${r.parcelle ? `<dt>Parcelle</dt><dd>${esc(r.parcelle)}</dd>` : ''}${r.stade ? `<dt>Stade</dt><dd>${esc(r.stade)}</dd>` : ''}
+    <dt>Trace</dt><dd>${r.trace.length ? fmt(r.distance) + ' m' + (r.surface ? ' · ' + fmt(r.surface, 2) + ' ha' : '') + (r.duree ? ' · ' + Math.round(r.duree / 60) + ' min' : '') : 'aucune'}</dd>
+    <dt>Points</dt><dd>${r.points.length}</dd>
+    ${r.commentaire ? `<dt>Commentaire</dt><dd>${esc(r.commentaire)}</dd>` : ''}
+    <dt>Statut</dt><dd>${r.sentAt ? 'envoyé le ' + new Date(r.sentAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '<span class="pill warn">à envoyer</span>'}</dd></dl></div>
+    <button class="btn ghost" id="d-del" type="button">🗑 Supprimer du téléphone</button>`;
+  const bar = $('#bar'); bar.innerHTML = `<button class="btn primary" id="d-send" type="button">📤 ${r.sentAt ? 'Renvoyer' : 'Envoyer à CAVAC'}</button>`; bar.classList.remove('hide');
+  $('#d-send').onclick = () => sendRecords([r]);
+  $('#d-del').onclick = () => { if (!confirm(r.sentAt ? 'Supprimer cet enregistrement du téléphone ?' : 'Cet enregistrement n\'a pas été envoyé. Le supprimer quand même ?')) return; RECS = RECS.filter(x => x !== r); saveRecs(); VIEW = 'home'; render(); };
+}
+
+/* ---------- export KML + envoi ---------- */
+const xml = (s) => String(s ?? '').replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
+function kmlOf(r) {
+  const payload = { ...r }; delete payload.sentAt;
+  const data = (o) => Object.entries(o).filter(([, v]) => v != null && v !== '').map(([k, v]) => `<Data name="${xml(k)}"><value>${xml(v)}</value></Data>`).join('');
+  const desc = [`Exploitation : ${r.agri}`, `Essai : ${r.essai.nom || r.essai.id}`, ...r.produits.map(p => `${p.produit} : ${p.dose ?? '?'} ${p.unite}/ha`), `Date : ${new Date(r.date).toLocaleString('fr-FR')}`, r.parcelle && `Parcelle : ${r.parcelle}`, r.stade && `Stade : ${r.stade}`, r.surface && `Surface estimée : ${r.surface} ha`, r.commentaire && `Commentaire : ${r.commentaire}`].filter(Boolean).join('\n');
+  const segs = []; let s = [];
+  r.trace.forEach(p => { if (p[4] === 1 && s.length) { segs.push(s); s = []; } s.push(p); }); if (s.length) segs.push(s);
+  const line = (sg) => `<LineString><tessellate>1</tessellate><coordinates>${sg.map(p => p[0] + ',' + p[1] + ',0').join(' ')}</coordinates></LineString>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${xml(recLabel(r))}</name>
+<ExtendedData><Data name="cultivacteurs"><value><![CDATA[${JSON.stringify(payload)}]]></value></Data></ExtendedData>
+<Style id="tr"><LineStyle><color>ff3fd2ff</color><width>4</width></LineStyle></Style>
+${segs.length ? `<Placemark><name>Trace application</name><description>${xml(desc)}</description><styleUrl>#tr</styleUrl><ExtendedData>${data({ exploitation: r.agri, essai: r.essai.id || r.essai.nom, produits: r.produits.map(p => `${p.produit} ${p.dose ?? ''} ${p.unite}/ha`).join(' + '), date: new Date(r.date).toISOString(), parcelle: r.parcelle, stade: r.stade, largeur: r.largeur, surface_ha: r.surface, distance_m: r.distance })}</ExtendedData>${segs.length > 1 ? `<MultiGeometry>${segs.map(line).join('')}</MultiGeometry>` : line(segs[0])}</Placemark>` : ''}
+${r.points.map((p, i) => `<Placemark><name>${xml(p[4] || 'Point ' + (i + 1))}</name><description>${xml(desc)}</description><Point><coordinates>${p[0]},${p[1]},0</coordinates></Point></Placemark>`).join('\n')}
+</Document></kml>`;
+}
+function fileName(r) { const d = new Date(r.date); const ds = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0'); return `CultivActeurs_${r.agri}_${ds}_${r.essai.id || r.essai.nom || 'essai'}`.replace(/[^\w\-]+/g, '_').slice(0, 90) + '.kml'; }
+async function sendRecords(list) {
+  const files = list.map(r => new File([kmlOf(r)], fileName(r), { type: 'application/vnd.google-earth.kml+xml' }));
+  const subject = `CultivActeurs — ${CFG.agri} — ${list.length} application(s)`;
+  const body = list.map(r => `• ${recLabel(r)} — ${new Date(r.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}${r.surface ? ' — ' + fmt(r.surface, 2) + ' ha' : ''}`).join('\n') + '\n\nFichier(s) joint(s) à importer dans CultivActeurs (Retours terrain).';
+  const mark = () => { const t = Date.now(); list.forEach(r => r.sentAt = t); saveRecs(); render(); };
+  try {
+    if (navigator.canShare && navigator.canShare({ files })) {
+      await navigator.share({ files, title: subject, text: (CFG.dest ? 'À : ' + CFG.dest + '\n' : '') + body });
+      if (confirm('Le message a-t-il bien été envoyé ? (Les enregistrements seront marqués « envoyé ».)')) mark();
+      return;
+    }
+  } catch (e) { if (e.name === 'AbortError') return; }
+  // repli : téléchargement des fichiers + messagerie
+  files.forEach((f, i) => setTimeout(() => { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }, i * 400));
+  setTimeout(() => {
+    if (confirm('Le(s) fichier(s) ont été téléchargés. Ouvrir la messagerie pour les envoyer à CAVAC ? (Pensez à les joindre au message.)')) location.href = `mailto:${encodeURIComponent(CFG.dest || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body + '\n\nPièces jointes : ' + files.map(f => f.name).join(', '))}`;
+    if (confirm('Marquer comme envoyé ?')) mark();
+  }, files.length * 400 + 300);
+}
+
+/* ---------- démarrage ---------- */
+$('#b-home').onclick = () => { if (VIEW === 'form') readForm(); VIEW = 'home'; render(); };
+readHashConfig(); load();
+if (CUR) { /* une trace était en cours : reprise possible depuis l'accueil */ }
+render();
+</script>
+</body>
+</html>
